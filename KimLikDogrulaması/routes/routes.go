@@ -9,5 +9,5 @@ import (
 func GirisRoutes(rts *gin.Engine) {
 	rts.GET("/signup", controller.SignUp())
 	rts.GET("/login", controller.LogIn())
-
+	rts.GET("/users", controller.GetUSers())
 }

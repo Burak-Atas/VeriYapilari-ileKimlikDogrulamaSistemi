@@ -8,7 +8,6 @@ import (
 	"log"
 	"math/rand"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -21,28 +20,30 @@ var linker linkedlist.LinkedList
 
 func SignUp() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{"message": "sign up sayfasında"})
+		count := 0
+
 		var kullanici models.Kullanici
 		DogrulamaHatasi := Dogrulama.Struct(kullanici)
 		if DogrulamaHatasi != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": DogrulamaHatasi})
 			return
 		}
+		fmt.Println(count)
 
-		count := linker.SearchEmail(kullanici.Email)
+		count = linker.SearchEmail(kullanici.Email)
 		if count != 0 {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "eposta sistemde zaten kayitli"})
+			return
 		}
 		sifre := HashPasword(kullanici.Password)
 		kullanici.Password = sifre
-		kullanici.Kimlik = ObjectID()
+		kullanici.Kimlik = string(GenerateZoneID())
 		token := help.CreatedNewToken(kullanici.Email, kullanici.İsim, kullanici.Soyisim, kullanici.Kimlik)
 
 		kullanici.Token = token
-		fmt.Println("\n\n")
-		fmt.Println(kullanici.Email)
-		fmt.Println(kullanici.Token)
-		fmt.Println(linker.GetSize())
+
+		fmt.Println("kullanici tokeni -->>>" + kullanici.Token)
+
 		linker.InsertLast(kullanici.Kimlik, kullanici.İsim, kullanici.Soyisim, kullanici.Email, kullanici.Password)
 		c.JSON(http.StatusOK, gin.H{"message": "kullanici başarıyla eklenmiştir"})
 
@@ -62,17 +63,20 @@ func HashPasword(pasword string) string {
 	return string(bytes)
 }
 
-func ObjectID() string {
-	karakterler := "abcdefghijklmnoprstuvxwyz"
-	karakterler += strings.ToUpper(karakterler)
-	karakterler += "1234567890+%&/"
-	var newID string = ""
-	for i := 0; i < 10; i++ {
-		rand.Seed(time.Now().Unix())
-		x := rand.Intn(len(karakterler))
-		newID = newID + string(karakterler[x])
+var (
+	JwtLength   = 16
+	ZoneIDBegin = []byte{'T', 'O', 'K', 'E', 'N', 'J', 'W', 'T'}
+)
+
+const letterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+
+func GenerateZoneID() []byte {
+	rand.Seed(time.Now().UnixNano())
+	b := make([]byte, JwtLength)
+	for i := range b {
+		b[i] = letterBytes[rand.Int63()%int64(len(letterBytes))]
 	}
-	return newID
+	return append(ZoneIDBegin, b...)
 }
 
 func LogIn() gin.HandlerFunc {
@@ -91,8 +95,9 @@ func LogIn() gin.HandlerFunc {
 		saglandi := SifreDogrulama(bulunanKullanici.Password, kullanici.Password)
 		if !saglandi {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "sifreler uyusmadı"})
-
+			return
 		}
+
 		if bulunanKullanici.Email == "" {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": ""})
 			return
@@ -118,4 +123,22 @@ func SifreDogrulama(sifre1, sifre2 string) bool {
 		saglandi = false
 	}
 	return saglandi
+}
+
+func GetUSers() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{
+			"message": "kullanici listesi",
+		})
+		if linker.GetSize() == 0 {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "kullanici bulunamadı"})
+			return
+		}
+		for i := 0; i < linker.GetSize(); i++ {
+			c.JSON(http.StatusOK, gin.H{
+				"message": linker.GetItems()[i],
+			})
+		}
+
+	}
 }
